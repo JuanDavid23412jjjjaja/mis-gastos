@@ -1,0 +1,7 @@
+credentials/
+__pycache__/
+*.pyc
+*.pyo
+.streamlit/secrets.toml
+.env
+*.log
