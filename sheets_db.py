@@ -388,13 +388,15 @@ def save_duplicates(groups):
     new_rows = []
     for g in groups:
         gid = g.get("grupo_id", "")
-        if gid and gid not in existing:
+        id_val = g.get("id", gid)
+        # dedupe por el ID escrito (col A) y por grupo (col B)
+        if gid and id_val not in existing:
             new_rows.append([
-                g.get("id", ""), gid, g.get("fecha", ""), g.get("hora", ""),
+                id_val, gid, g.get("fecha", ""), g.get("hora", ""),
                 g.get("comercio", ""), g.get("monto", 0), g.get("n_transacciones", len(g.get("transacciones", []))),
                 g.get("tipo", "por_definir"), "pendiente", "", ""
             ])
-            existing.add(gid)
+            existing.add(id_val)
     if new_rows:
         ws.append_rows(new_rows, value_input_option="USER_ENTERED")
     return len(new_rows)

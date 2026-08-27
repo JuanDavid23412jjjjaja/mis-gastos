@@ -22,7 +22,7 @@ from sheets_db import (
 )
 from verify_duplicates import verify_duplicates, apply_verification
 from anomaly_detector import detect_duplicates, save_duplicate_groups
-from reports import send_weekly_report, check_daily_alert
+from reports import send_weekly_report
 
 
 st.set_page_config(
@@ -548,11 +548,12 @@ def page_duplicados():
     tipos = {"por_definir": "⏳ Por definir", "duplicado_real": "✅ Duplicado real", "duplicado_cancelado": "❌ Cancelado (sin cargo)"}
     status_map = {"pendiente": "⏳ Pendiente", "verificado": "✅ Verificado"}
 
-    for _, row in df.iterrows():
-        with st.expander(f"{row.get('Comercio','')} - ${float(row.get('Monto',0)):,.0f} x{row.get('NumTxns',1)}"):
+    pad = df.fillna("").copy()
+    for idx, (_, row) in enumerate(pad.iterrows()):
+        with st.expander(f"{row.get('Comercio','')} - ${float(row.get('Monto') or 0):,.0f} x{row.get('NumTxns',1)}"):
             cols = st.columns(4)
             cols[0].metric("Fecha", row.get("FechaTxn", ""))
-            cols[1].metric("Monto", fmt_cop(float(row.get("Monto", 0))))
+            cols[1].metric("Monto", fmt_cop(float(row.get("Monto") or 0)))
             cols[2].metric("N° transacciones", row.get("NumTxns", 1))
             cols[3].metric("Tipo", tipos.get(row.get("Tipo", ""), row.get("Tipo", "")))
 
@@ -562,15 +563,15 @@ def page_duplicados():
 
             c1, c2, c3 = st.columns(3)
             grupo_id = row.get("ID")
-            if c1.button(f"✅ Marcar real", key=f"real_{grupo_id}"):
+            if c1.button(f"✅ Marcar real", key=f"real_{idx}_{grupo_id}"):
                 update_duplicate_status(grupo_id, "duplicado_real", "verificado", "Marcado manualmente", "manual")
                 st.rerun()
-            if c2.button(f"❌ Cancelado", key=f"canc_{grupo_id}"):
+            if c2.button(f"❌ Cancelado", key=f"canc_{idx}_{grupo_id}"):
                 update_duplicate_status(grupo_id, "duplicado_cancelado", "verificado", "Marcado manualmente", "manual")
                 st.rerun()
-            if c3.button(f"🔍 Verificar con extracto", key=f"ver_{grupo_id}"):
+            if c3.button(f"🔍 Verificar con extracto", key=f"ver_{idx}_{grupo_id}"):
                 stmts = get_statements()
-                res = verify_duplicates([row], stmts)
+                res = verify_duplicates([dict(row)], stmts)
                 if res:
                     apply_verification(res)
                     st.success("Verificación completada")
@@ -616,7 +617,7 @@ def page_cuenta_ahorros():
 
     st.subheader("Movimientos")
     disp = dfm[["Fecha", "Descripcion", "Tipo", "Valor", "Oficina"]].copy()
-    st.dataframe(disp, use_container_width=True, hide_index=True)
+    st.dataframe(disp, width="stretch", hide_index=True)
 
 
 def main():

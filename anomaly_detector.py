@@ -51,13 +51,16 @@ def detect_duplicates(txns):
 
 def save_duplicate_groups(groups):
     from sheets_db import save_duplicates
+    import hashlib
     payload = []
     for g in groups:
         if not g.get("grupo_id"):
             continue
+        gid = g["grupo_id"]
+        stable_id = hashlib.md5(gid.encode()).hexdigest()[:12]
         payload.append({
-            "grupo_id": g["grupo_id"],
-            "id": g.get("grupo_id") + "-" + str(hash(frozenset()) % 1000),
+            "grupo_id": gid,
+            "id": gid + "-" + stable_id,
             "fecha": g.get("fecha", ""),
             "hora": g.get("hora", ""),
             "comercio": normalize_comercio(g.get("comercio", "")),
