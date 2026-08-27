@@ -24,14 +24,48 @@ def detect_duplicates(txns):
     duplicates = []
     for key, items in groups.items():
         if len(items) > 1:
+            fecha, monto, comercio_key = key
+            try:
+                monto_f = float(monto)
+            except (TypeError, ValueError):
+                monto_f = 0.0
+            first = items[0]
+            fecha_id = first.get("fecha", "").replace("/", "")
+            comercio_id = comercio_key.replace(" ", "_")[:15]
+            grupo_id = f"DUP-{fecha_id}-{monto_f:.0f}-{comercio_id}"
             duplicates.append({
                 "tipo": "duplicado",
-                "mensaje": f"{len(items)} transacciones de ${items[0]['monto']:,.0f} en {normalize_comercio(items[0]['comercio'])}",
+                "grupo_id": grupo_id,
+                "mensaje": f"{len(items)} transacciones de ${monto_f:,.0f} en {normalize_comercio(items[0]['comercio'])}",
                 "transacciones": items,
+                "n_transacciones": len(items),
+                "fecha": first.get("fecha", ""),
+                "hora": first.get("hora", ""),
+                "comercio": first.get("comercio", ""),
+                "monto": monto_f,
                 "severidad": "alta",
             })
 
     return duplicates
+
+
+def save_duplicate_groups(groups):
+    from sheets_db import save_duplicates
+    payload = []
+    for g in groups:
+        if not g.get("grupo_id"):
+            continue
+        payload.append({
+            "grupo_id": g["grupo_id"],
+            "id": g.get("grupo_id") + "-" + str(hash(frozenset()) % 1000),
+            "fecha": g.get("fecha", ""),
+            "hora": g.get("hora", ""),
+            "comercio": normalize_comercio(g.get("comercio", "")),
+            "monto": g.get("monto", 0),
+            "n_transacciones": g.get("n_transacciones", len(g.get("transacciones", []))),
+            "tipo": "por_definir",
+        })
+    return save_duplicates(payload)
 
 
 def detect_fees(txns):

@@ -34,7 +34,7 @@ def sync_today_emails():
     return txns
 
 
-def build_daily_email(txns_hoy, anomalias, return_ids):
+def build_daily_email(txns_hoy, anomalias, return_ids, duplicados_verificados=None):
     today = datetime.now()
     fecha_str = today.strftime("%d/%m/%Y")
 
@@ -74,6 +74,8 @@ def build_daily_email(txns_hoy, anomalias, return_ids):
         .footer {{ text-align: center; color: #555; font-size: 11px; margin-top: 30px; padding-top: 15px; border-top: 1px solid #222; }}
         .badge {{ display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }}
         .badge.returned {{ background: #2d1a2d; color: #e74c3c; border: 1px solid #e74c3c; }}
+        .badge.dup_real {{ background: #2d1a1a; color: #e74c3c; border: 1px solid #e74c3c; }}
+        .badge.dup_canc {{ background: #1a2d1a; color: #2ecc71; border: 1px solid #2ecc71; }}
     </style>
     </head>
     <body>
@@ -121,6 +123,29 @@ def build_daily_email(txns_hoy, anomalias, return_ids):
             <div class="{css_class}">
                 <div class="tag {tag_class}">{tag_label}</div>
                 <div class="msg">{a['mensaje']}</div>
+            </div>
+            """
+        html += "</div>"
+
+    if duplicados_verificados:
+        html += '<div class="section"><h2>Verificación de duplicados</h2>'
+        for d in duplicados_verificados:
+            tipo = d.get("tipo", "")
+            if tipo == "duplicado_real":
+                css = "alert"
+                tag_class = "red"
+                tag_label = "DUPLICADO REAL"
+                badge = ' <span class="badge dup_real">⚠ CONFIRMADO</span>'
+            else:
+                css = "alert info"
+                tag_class = "blue"
+                tag_label = "CANCELADO"
+                badge = ' <span class="badge dup_canc">✓ SIN CARGO</span>'
+            html += f"""
+            <div class="{css}">
+                <div class="tag {tag_class}">{tag_label}</div>
+                <div class="msg">{normalize_comercio(d.get('comercio', ''))[:40]} - ${float(d.get('monto', 0)):,.0f}{badge}</div>
+                <div style="font-size:11px; color:#888; margin-top:3px;">{d.get('comentario','')}</div>
             </div>
             """
         html += "</div>"
@@ -209,7 +234,39 @@ def send_daily_report(email="juandroide7@gmail.com"):
 
     anomalias = detect_all(txns_hoy_for_anomaly, historial_clean)
 
-    html = build_daily_email(txns_hoy_raw, anomalias, return_ids)
+    # Persist nuevos duplicados detectados
+    try:
+        from anomaly_detector import save_duplicate_groups
+        save_duplicate_groups(anomalias.get("duplicados", []))
+    except Exception as e:
+        import sys
+        print(f"[reports] save_duplicate_groups: {e}", file=sys.stderr)
+
+    # Verificar duplicados pendientes contra extractos (solo si hay extractos cargados)
+    duplicados_verificados = []
+    try:
+        from sheets_db import get_duplicates, get_statements
+        from verify_duplicates import verify_duplicates, apply_verification
+        pendientes = [r for r in get_duplicates() if r.get("Estado") == "pendiente"]
+        stmts = get_statements()
+        if pendientes and stmts:
+            res = verify_duplicates(pendientes, stmts)
+            if res:
+                apply_verification(res)
+                # recargar para correo
+                for dup in get_duplicates():
+                    if dup.get("Estado") == "verificado" and dup.get("Tipo") in ("duplicado_real", "duplicado_cancelado"):
+                        duplicados_verificados.append({
+                            "comercio": dup.get("Comercio", ""),
+                            "monto": dup.get("Monto", 0),
+                            "tipo": dup.get("Tipo", ""),
+                            "comentario": dup.get("Comentario", ""),
+                        })
+    except Exception as e:
+        import sys
+        print(f"[reports] verify_duplicates: {e}", file=sys.stderr)
+
+    html = build_daily_email(txns_hoy_raw, anomalias, return_ids, duplicados_verificados)
 
     today = datetime.now()
     n_txns = len(txns_hoy_raw)

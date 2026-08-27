@@ -18,6 +18,9 @@ TAB_CATEGORIES = "CATEGORIAS"
 TAB_INCOME = "INGRESOS"
 TAB_RULES = "REGLAS"
 TAB_RETURNS = "DEVOLUCIONES"
+TAB_DUPLICATES = "DUPLICADOS"
+TAB_STATEMENTS = "EXTRACTOS"
+TAB_SAVINGS = "CUENTA_AHORROS"
 
 TRANSACTION_COLUMNS = [
     "ID", "Fecha", "Hora", "Tarjeta", "Banco", "Monto",
@@ -29,6 +32,9 @@ CATEGORY_COLUMNS = ["Categoria", "PalabrasClave", "Color", "PresupuestoMensual"]
 INCOME_COLUMNS = ["ID", "Fecha", "Fuente", "Monto", "Notas"]
 RULE_COLUMNS = ["PalabraClave", "Categoria", "AprendidoDe"]
 RETURN_COLUMNS = ["ID", "FechaTxn", "HoraTxn", "Comercio", "Monto", "Banco", "Tarjeta", "Motivo", "Estado", "FechaDevolucion"]
+DUPLICATE_COLUMNS = ["ID", "GrupoID", "FechaTxn", "HoraTxn", "Comercio", "Monto", "NumTxns", "Tipo", "Estado", "Comentario", "VerificadoEn"]
+STATEMENT_COLUMNS = ["ID", "Producto", "Tarjeta", "Fecha", "Descripcion", "Valor", "Signo", "Periodo", "Fuente"]
+SAVINGS_COLUMNS = ["ID", "Mes", "Fecha", "Descripcion", "Valor", "Tipo", "Oficina", "SaldoAnterior", "NuevoSaldo"]
 
 DEFAULT_CATEGORIES = {
     "Transporte": {
@@ -87,18 +93,39 @@ BANK_SENDERS = {
 
 def get_credentials():
     import json
-    if os.environ.get("STREAMLIT_CLOUD"):
-        return {
-            "client_id": os.environ["GOOGLE_CLIENT_ID"],
-            "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
-            "refresh_token": os.environ["GOOGLE_REFRESH_TOKEN"],
+    is_cloud = os.environ.get("STREAMLIT_CLOUD") or os.environ.get("GITHUB_ACTIONS")
+    if is_cloud:
+        data = {
+            "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
+            "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
+            "refresh_token": os.environ.get("GOOGLE_REFRESH_TOKEN"),
         }
+        if os.environ.get("SPREADSHEET_NAME"):
+            data["spreadsheet_name"] = os.environ["SPREADSHEET_NAME"]
+        return data
     if os.path.exists(TOKEN_PATH):
         with open(TOKEN_PATH) as f:
             return json.load(f)
     return None
 
+def get_cedula():
+    return os.environ.get("CEDULA", "1110597861")
+
+def get_send_email():
+    return os.environ.get("SEND_EMAIL", "juandroide7@gmail.com")
+
+def get_spreadsheet_name():
+    creds = get_credentials()
+    if creds and creds.get("spreadsheet_name"):
+        return creds["spreadsheet_name"]
+    env_name = os.environ.get("SPREADSHEET_NAME")
+    if env_name:
+        return env_name
+    return SPREADSHEET_NAME
+
 def save_token(token_data):
+    if os.environ.get("GITHUB_ACTIONS"):
+        return
     os.makedirs(CREDENTIALS_DIR, exist_ok=True)
     import json
     with open(TOKEN_PATH, "w") as f:

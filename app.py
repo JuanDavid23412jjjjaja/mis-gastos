@@ -17,8 +17,11 @@ from sheets_db import (
     get_or_create_spreadsheet, save_transactions, get_transactions_df,
     get_categories_config, add_rule, get_rules, add_income, update_txn_category,
     setup_spreadsheet, make_txn_id,
-    mark_as_returned, get_returns_df, get_returned_txn_ids, update_return_status
+    mark_as_returned, get_returns_df, get_returned_txn_ids, update_return_status,
+    get_duplicates, update_duplicate_status, get_statements, get_savings_rows
 )
+from verify_duplicates import verify_duplicates, apply_verification
+from anomaly_detector import detect_duplicates, save_duplicate_groups
 from reports import send_weekly_report, check_daily_alert
 
 
@@ -523,6 +526,99 @@ def page_configuracion():
                 st.rerun()
 
 
+
+
+def page_duplicados():
+    st.title("🔍 Verificación de Duplicados")
+    st.markdown("Cargos repetidos se verifican contra los extractos reales de tarjeta.")
+
+    dup_rows = get_duplicates()
+    if not dup_rows:
+        st.info("Sin duplicados pendientes.")
+        return
+
+    df = pd.DataFrame(dup_rows)
+    estado = st.selectbox("Filtrar por estado", ["Todos", "pendiente", "verificado"])
+    if estado != "Todos":
+        df = df[df["Estado"] == estado]
+    if df.empty:
+        st.info("Sin resultados para el filtro.")
+        return
+
+    tipos = {"por_definir": "⏳ Por definir", "duplicado_real": "✅ Duplicado real", "duplicado_cancelado": "❌ Cancelado (sin cargo)"}
+    status_map = {"pendiente": "⏳ Pendiente", "verificado": "✅ Verificado"}
+
+    for _, row in df.iterrows():
+        with st.expander(f"{row.get('Comercio','')} - ${float(row.get('Monto',0)):,.0f} x{row.get('NumTxns',1)}"):
+            cols = st.columns(4)
+            cols[0].metric("Fecha", row.get("FechaTxn", ""))
+            cols[1].metric("Monto", fmt_cop(float(row.get("Monto", 0))))
+            cols[2].metric("N° transacciones", row.get("NumTxns", 1))
+            cols[3].metric("Tipo", tipos.get(row.get("Tipo", ""), row.get("Tipo", "")))
+
+            if row.get("Tipo") and row.get("Tipo") != "por_definir":
+                st.write(f"**Comentario:** {row.get('Comentario','')}")
+                st.write(f"**Verificado en:** {row.get('VerificadoEn','')}")
+
+            c1, c2, c3 = st.columns(3)
+            grupo_id = row.get("ID")
+            if c1.button(f"✅ Marcar real", key=f"real_{grupo_id}"):
+                update_duplicate_status(grupo_id, "duplicado_real", "verificado", "Marcado manualmente", "manual")
+                st.rerun()
+            if c2.button(f"❌ Cancelado", key=f"canc_{grupo_id}"):
+                update_duplicate_status(grupo_id, "duplicado_cancelado", "verificado", "Marcado manualmente", "manual")
+                st.rerun()
+            if c3.button(f"🔍 Verificar con extracto", key=f"ver_{grupo_id}"):
+                stmts = get_statements()
+                res = verify_duplicates([row], stmts)
+                if res:
+                    apply_verification(res)
+                    st.success("Verificación completada")
+                    st.rerun()
+
+    if st.button("🔍 Verificar todos con extracto", type="primary"):
+        pendientes = [r for r in dup_rows if r.get("Estado") == "pendiente"]
+        if pendientes:
+            stmts = get_statements()
+            res = verify_duplicates(pendientes, stmts)
+            st.success(f"{apply_verification(res)} duplicados actualizados")
+            st.rerun()
+        else:
+            st.info("Sin duplicados pendientes")
+
+
+def page_cuenta_ahorros():
+    st.title("🏦 Cuenta de Ahorros")
+    st.markdown("Trazabilidad de la cuenta 1620 a partir del extracto portafolio mensual.")
+
+    savings = get_savings_rows()
+    if not savings:
+        st.info("Sin datos de cuenta de ahorros. Ejecuta la sincronización de extractos.")
+        return
+
+    df = pd.DataFrame(savings)
+    if "Valor" in df.columns:
+        df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0)
+
+    if "Mes" in df.columns and "Mes" in df.columns:
+        mes = st.selectbox("Mes", sorted(df["Mes"].unique(), reverse=True), index=0)
+        dfm = df[df["Mes"] == mes]
+    else:
+        dfm = df
+
+    ingresos = dfm[dfm["Tipo"] == "ingreso"]["Valor"].sum()
+    gastos = dfm[dfm["Tipo"] == "gasto"]["Valor"].sum()
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Ingresos", fmt_cop(ingresos))
+    c2.metric("Egresos", fmt_cop(gastos))
+    c3.metric("Flujo neto", fmt_cop(ingresos - gastos))
+
+    st.subheader("Movimientos")
+    disp = dfm[["Fecha", "Descripcion", "Tipo", "Valor", "Oficina"]].copy()
+    st.dataframe(disp, use_container_width=True, hide_index=True)
+
+
 def main():
     st.sidebar.title("MisGastos")
     st.sidebar.markdown("Control de gastos personales")
@@ -538,7 +634,7 @@ def main():
     st.sidebar.divider()
     page = st.sidebar.radio(
         "Navegación",
-        ["Resumen", "Detalle", "Categorías", "Comparación", "Configuración"],
+        ["Resumen", "Detalle", "Categorías", "Comparación", "Duplicados", "Cuenta de Ahorros", "Configuración"],
         index=0,
     )
 
@@ -560,6 +656,10 @@ def main():
         page_categorias()
     elif page == "Comparación":
         page_comparacion()
+    elif page == "Duplicados":
+        page_duplicados()
+    elif page == "Cuenta de Ahorros":
+        page_cuenta_ahorros()
     elif page == "Configuración":
         page_configuracion()
 

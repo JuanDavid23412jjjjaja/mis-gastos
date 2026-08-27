@@ -1,0 +1,33 @@
+name: Monthly Extract
+
+on:
+  schedule:
+    - cron: "5 2 1 * *"
+  workflow_dispatch:
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qpdf
+          pip install -r requirements.txt
+
+      - name: Process monthly extracts
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          SPREADSHEET_NAME: ${{ secrets.SPREADSHEET_NAME }}
+          SEND_EMAIL: ${{ secrets.SEND_EMAIL }}
+          CEDULA: ${{ secrets.CEDULA }}
+        run: python3 process_extracts_entry.py

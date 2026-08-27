@@ -3,8 +3,10 @@ import hashlib
 from datetime import datetime
 from config import (
     SPREADSHEET_NAME, TAB_TRANSACTIONS, TAB_CATEGORIES,
-    TAB_INCOME, TAB_RULES, TAB_RETURNS, TRANSACTION_COLUMNS, CATEGORY_COLUMNS,
-    INCOME_COLUMNS, RULE_COLUMNS, RETURN_COLUMNS, DEFAULT_CATEGORIES
+    TAB_INCOME, TAB_RULES, TAB_RETURNS, TAB_DUPLICATES, TAB_STATEMENTS, TAB_SAVINGS,
+    TRANSACTION_COLUMNS, CATEGORY_COLUMNS,
+    INCOME_COLUMNS, RULE_COLUMNS, RETURN_COLUMNS, DUPLICATE_COLUMNS,
+    STATEMENT_COLUMNS, SAVINGS_COLUMNS, DEFAULT_CATEGORIES, get_spreadsheet_name
 )
 
 
@@ -22,12 +24,18 @@ def get_client():
     access_token = creds_data.get("access_token")
 
     if not access_token:
-        with open(CLIENT_SECRETS_PATH) as f:
-            secrets = json.load(f)
-        installed = secrets.get("installed", {})
+        import os
+        client_id = creds_data.get("client_id")
+        client_secret = creds_data.get("client_secret")
+        if (not client_id or not client_secret) and os.path.exists(CLIENT_SECRETS_PATH):
+            with open(CLIENT_SECRETS_PATH) as f:
+                secrets = json.load(f)
+            installed = secrets.get("installed", {})
+            client_id = client_id or installed.get("client_id")
+            client_secret = client_secret or installed.get("client_secret")
         data = {
-            "client_id": installed.get("client_id"),
-            "client_secret": installed.get("client_secret"),
+            "client_id": client_id,
+            "client_secret": client_secret or "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",
             "refresh_token": refresh_token,
             "grant_type": "refresh_token",
         }
@@ -53,11 +61,12 @@ def get_client():
 
 def get_or_create_spreadsheet():
     client = get_client()
+    name = get_spreadsheet_name()
     try:
-        sh = client.open(SPREADSHEET_NAME)
+        sh = client.open(name)
         return sh
     except gspread.SpreadsheetNotFound:
-        sh = client.create(SPREADSHEET_NAME)
+        sh = client.create(name)
         setup_spreadsheet(sh)
         return sh
 
@@ -96,6 +105,21 @@ def setup_spreadsheet(sh=None):
         ws = sh.add_worksheet(title=TAB_RETURNS, rows=500, cols=len(RETURN_COLUMNS))
         ws.update(range_name="A1", values=[RETURN_COLUMNS])
         ws.format("A1:J1", {"textFormat": {"bold": True}, "backgroundColor": {"red": 0.2, "green": 0.2, "blue": 0.2}})
+
+    if TAB_DUPLICATES not in existing:
+        ws = sh.add_worksheet(title=TAB_DUPLICATES, rows=500, cols=len(DUPLICATE_COLUMNS))
+        ws.update(range_name="A1", values=[DUPLICATE_COLUMNS])
+        ws.format("A1:K1", {"textFormat": {"bold": True}, "backgroundColor": {"red": 0.2, "green": 0.2, "blue": 0.2}})
+
+    if TAB_STATEMENTS not in existing:
+        ws = sh.add_worksheet(title=TAB_STATEMENTS, rows=2000, cols=len(STATEMENT_COLUMNS))
+        ws.update(range_name="A1", values=[STATEMENT_COLUMNS])
+        ws.format("A1:H1", {"textFormat": {"bold": True}, "backgroundColor": {"red": 0.2, "green": 0.2, "blue": 0.2}})
+
+    if TAB_SAVINGS not in existing:
+        ws = sh.add_worksheet(title=TAB_SAVINGS, rows=1000, cols=len(SAVINGS_COLUMNS))
+        ws.update(range_name="A1", values=[SAVINGS_COLUMNS])
+        ws.format("A1:I1", {"textFormat": {"bold": True}, "backgroundColor": {"red": 0.2, "green": 0.2, "blue": 0.2}})
 
     return sh
 
@@ -310,3 +334,138 @@ def update_return_status(return_id, new_status):
             ws.update_cell(i + 1, 9, new_status)
             return True
     return False
+
+
+def save_statements(movements):
+    sh = get_or_create_spreadsheet()
+    ws = sh.worksheet(TAB_STATEMENTS)
+    existing = set()
+    try:
+        for row in ws.get_all_values()[1:]:
+            if row and row[0]:
+                existing.add(row[0])
+    except:
+        pass
+    new_rows = []
+    for m in movements:
+        sid = make_txn_id(m.get("fecha", ""), m.get("descripcion", ""), m.get("producto", ""), str(m.get("valor", "")))
+        if sid not in existing:
+            new_rows.append([
+                sid, m.get("producto", ""), m.get("tarjeta", ""), m.get("fecha", ""),
+                m.get("descripcion", ""), m.get("valor", 0), m.get("signo", ""),
+                m.get("periodo", ""), m.get("fuente", "extracto")
+            ])
+            existing.add(sid)
+    if new_rows:
+        ws.append_rows(new_rows, value_input_option="USER_ENTERED")
+    return len(new_rows)
+
+
+def get_statements():
+    sh = get_or_create_spreadsheet()
+    ws = sh.worksheet(TAB_STATEMENTS)
+    all_vals = ws.get_all_values()
+    if len(all_vals) <= 1:
+        return []
+    headers = all_vals[0]
+    rows = []
+    for row in all_vals[1:]:
+        if row and row[0]:
+            rows.append(dict(zip(headers, row)))
+    return rows
+
+
+def save_duplicates(groups):
+    sh = get_or_create_spreadsheet()
+    ws = sh.worksheet(TAB_DUPLICATES)
+    existing = set()
+    try:
+        for row in ws.get_all_values()[1:]:
+            if row and row[0]:
+                existing.add(row[0])
+    except:
+        pass
+    new_rows = []
+    for g in groups:
+        gid = g.get("grupo_id", "")
+        if gid and gid not in existing:
+            new_rows.append([
+                g.get("id", ""), gid, g.get("fecha", ""), g.get("hora", ""),
+                g.get("comercio", ""), g.get("monto", 0), g.get("n_transacciones", len(g.get("transacciones", []))),
+                g.get("tipo", "por_definir"), "pendiente", "", ""
+            ])
+            existing.add(gid)
+    if new_rows:
+        ws.append_rows(new_rows, value_input_option="USER_ENTERED")
+    return len(new_rows)
+
+
+def get_duplicates():
+    sh = get_or_create_spreadsheet()
+    ws = sh.worksheet(TAB_DUPLICATES)
+    all_vals = ws.get_all_values()
+    if len(all_vals) <= 1:
+        return []
+    headers = all_vals[0]
+    rows = []
+    for row in all_vals[1:]:
+        if row and row[0]:
+            rows.append(dict(zip(headers, row)))
+    return rows
+
+
+def update_duplicate_status(grupo_id, tipo, estado, comentario="", verificad_en=""):
+    sh = get_or_create_spreadsheet()
+    ws = sh.worksheet(TAB_DUPLICATES)
+    all_vals = ws.get_all_values()
+    for i, row in enumerate(all_vals):
+        if row and row[0] == grupo_id:
+            if tipo:
+                ws.update_cell(i + 1, 8, tipo)
+            if estado:
+                ws.update_cell(i + 1, 9, estado)
+            if comentario:
+                ws.update_cell(i + 1, 10, comentario)
+            if verificad_en:
+                ws.update_cell(i + 1, 11, verificad_en)
+            return True
+    return False
+
+
+def save_savings_rows(savings_rows):
+    sh = get_or_create_spreadsheet()
+    ws = sh.worksheet(TAB_SAVINGS)
+    existing = set()
+    try:
+        for row in ws.get_all_values()[1:]:
+            if row and row[0]:
+                existing.add(row[0])
+    except:
+        pass
+    new_rows = []
+    for r in savings_rows:
+        rid = r.get("id", "")
+        if rid and rid not in existing:
+            new_rows.append([
+                rid, r.get("mes", ""), r.get("fecha", ""), r.get("descripcion", ""),
+                r.get("valor", 0), r.get("tipo", ""), r.get("oficina", ""),
+                r.get("saldo_anterior", ""), r.get("nuevo_saldo", "")
+            ])
+            existing.add(rid)
+    if new_rows:
+        ws.append_rows(new_rows, value_input_option="USER_ENTERED")
+    return len(new_rows)
+
+
+def get_savings_rows():
+    sh = get_or_create_spreadsheet()
+    ws = sh.worksheet(TAB_SAVINGS)
+    all_vals = ws.get_all_values()
+    if len(all_vals) <= 1:
+        return []
+    headers = all_vals[0]
+    rows = []
+    for row in all_vals[1:]:
+        if row and row[0]:
+            rows.append(dict(zip(headers, row)))
+    return rows

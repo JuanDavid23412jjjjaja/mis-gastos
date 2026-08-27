@@ -19,18 +19,24 @@ def strip_html(html):
     return text
 
 def get_access_token():
+    import os
     creds = get_credentials()
     if not creds:
         return None
     if "access_token" in creds and "expiry" in creds:
         if datetime.fromisoformat(creds["expiry"]) > datetime.now():
             return creds["access_token"]
-    with open(CLIENT_SECRETS_PATH) as f:
-        secrets = json.load(f)
-    installed = secrets.get("installed", {})
+    client_id = creds.get("client_id")
+    client_secret = creds.get("client_secret")
+    if (not client_id or not client_secret) and os.path.exists(CLIENT_SECRETS_PATH):
+        with open(CLIENT_SECRETS_PATH) as f:
+            secrets = json.load(f)
+        installed = secrets.get("installed", {})
+        client_id = client_id or installed.get("client_id")
+        client_secret = client_secret or installed.get("client_secret")
     data = {
-        "client_id": installed.get("client_id", creds.get("client_id")),
-        "client_secret": installed.get("client_secret", creds.get("client_secret")),
+        "client_id": client_id,
+        "client_secret": client_secret or "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",
         "refresh_token": creds.get("refresh_token"),
         "grant_type": "refresh_token",
     }
