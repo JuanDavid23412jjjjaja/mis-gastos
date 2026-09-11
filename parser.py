@@ -28,9 +28,9 @@ def parse_davivienda_email(body, subject=""):
         if hora_m:
             current["hora"] = hora_m.group(1)
 
-        valor_m = re.search(r"Valor Transacci[oó]n:\s*([\d.,]+)", line)
+        valor_m = re.search(r"Valor Transacci[oó]n:\s*\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+\.\d+|\d+)", line)
         if valor_m:
-            raw = valor_m.group(1).replace(".", "").replace(",", "")
+            raw = valor_m.group(1).replace(",", "")
             try:
                 current["monto"] = float(raw)
             except:
@@ -56,9 +56,9 @@ def parse_davivienda_email(body, subject=""):
         if recarga_m and not current.get("comercio"):
             current["comercio"] = "Recarga " + recarga_m.group(1).strip()
 
-        cuota_m = re.search(r"Cuota de Manejo:\s*([\d.,]+)", line)
+        cuota_m = re.search(r"Cuota de Manejo:\s*\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+\.\d+|\d+)", line)
         if cuota_m:
-            raw = cuota_m.group(1).replace(".", "").replace(",", "")
+            raw = cuota_m.group(1).replace(",", "")
             try:
                 current["monto"] = float(raw)
             except:
@@ -111,23 +111,23 @@ def parse_rappibank_email(body, subject=""):
         if hora_m:
             current["hora"] = hora_m.group(1)
 
-        valor_m = re.search(r"Valor:\s*([\d.,]+)", line)
+        valor_m = re.search(r"Valor:\s*\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d{1,3},\d+|\d+)", line)
         if valor_m:
-            raw = valor_m.group(1).replace(".", "").replace(",", "")
+            raw = valor_m.group(1).replace(".", "").replace(",", ".")
             try:
                 current["monto"] = float(raw)
             except:
                 pass
-        valor_m2 = re.search(r"Monto:\s*([\d.,]+)", line)
+        valor_m2 = re.search(r"Monto:\s*\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d{1,3},\d+|\d+)", line)
         if valor_m2 and not current.get("monto"):
-            raw = valor_m2.group(1).replace(".", "").replace(",", "")
+            raw = valor_m2.group(1).replace(".", "").replace(",", ".")
             try:
                 current["monto"] = float(raw)
             except:
                 pass
-        valor_m3 = re.search(r"Transacci[oó]n por:\s*\$?\s*([\d.,]+)", line)
+        valor_m3 = re.search(r"Transacci[oó]n por:\s*\$?\s*(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d{1,3},\d+|\d+)", line)
         if valor_m3 and not current.get("monto"):
-            raw = valor_m3.group(1).replace(".", "").replace(",", "")
+            raw = valor_m3.group(1).replace(".", "").replace(",", ".")
             try:
                 current["monto"] = float(raw)
             except:
@@ -167,9 +167,10 @@ def parse_rappicard_email(body, subject=""):
         tarjeta = "****" + tarjeta_match.group(1)
 
     monto = 0.0
-    monto_m = re.search(r"Monto\s*\$?([\d.,]+)", body_clean)
+    monto_m = re.search(r"Monto\s*\$?\s*(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d{1,3},\d+|\d+)", body_clean)
     if monto_m:
-        raw = monto_m.group(1).replace(".", "").replace(",", "")
+        raw = monto_m.group(1)
+        raw = raw.replace(".", "").replace(",", ".")
         try:
             monto = float(raw)
         except:

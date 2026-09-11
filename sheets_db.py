@@ -186,7 +186,7 @@ def save_transactions(transactions):
 def get_transactions_df():
     sh = get_or_create_spreadsheet()
     ws = sh.worksheet(TAB_TRANSACTIONS)
-    all_vals = ws.get_all_values()
+    all_vals = ws.get_all_values(value_render_option="UNFORMATTED_VALUE")
     if len(all_vals) <= 1:
         return []
     headers = all_vals[0]

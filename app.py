@@ -72,11 +72,13 @@ def load_transactions():
         return []
 
 
-def sync_emails():
+def sync_emails(days_back=5):
     with st.spinner("Leyendo emails de bancos..."):
-        msgs = get_bank_emails(days_back=90)
+        msgs = get_bank_emails(days_back=days_back)
         new_count = 0
-        for msg in msgs:
+        total = len(msgs)
+        prog = st.progress(0.0, text="Procesando emails...")
+        for i, msg in enumerate(msgs):
             try:
                 body = get_email_body(msg["id"])
                 subject = get_email_subject(msg["id"])
@@ -94,8 +96,11 @@ def sync_emails():
                         t["fuente"] = "email"
                     saved = save_transactions(txns)
                     new_count += saved
-            except Exception as e:
+            except Exception:
                 continue
+            if total:
+                prog.progress((i + 1) / total, text=f"Procesando {i+1}/{total}")
+        prog.empty()
         return new_count
 
 
@@ -625,7 +630,7 @@ def main():
     st.sidebar.markdown("Control de gastos personales")
 
     if st.sidebar.button("Sincronizar Emails", type="primary"):
-        new_count = sync_emails()
+        new_count = sync_emails(days_back=5)
         if new_count > 0:
             st.sidebar.success(f"+{new_count} transacciones")
         else:

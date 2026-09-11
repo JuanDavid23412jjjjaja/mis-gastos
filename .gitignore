@@ -5,3 +5,5 @@ __pycache__/
 .streamlit/secrets.toml
 .env
 *.log
+token_new.json
+credentials/token.json
