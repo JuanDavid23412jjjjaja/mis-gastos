@@ -65,6 +65,19 @@ def fmt_cop(value):
         return "$0"
 
 
+def normalize_monto(value):
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if s.startswith("$"):
+        s = s[1:]
+    s = s.replace(",", ".")
+    try:
+        return float(s)
+    except:
+        return ""
+
+
 def load_transactions():
     try:
         return get_transactions_df()
@@ -113,7 +126,7 @@ def page_resumen():
 
     df = pd.DataFrame(transactions)
     if "Monto" in df.columns:
-        df["Monto"] = pd.to_numeric(df["Monto"], errors="coerce").fillna(0)
+        df["Monto"] = (df["Monto"].map(normalize_monto).astype(float).fillna(0))
     if "Fecha" in df.columns:
         df["Fecha_dt"] = pd.to_datetime(df["Fecha"], format="%Y/%m/%d", errors="coerce")
 
@@ -194,7 +207,7 @@ def page_detalle():
 
     df = pd.DataFrame(transactions)
     if "Monto" in df.columns:
-        df["Monto"] = pd.to_numeric(df["Monto"], errors="coerce").fillna(0)
+        df["Monto"] = (df["Monto"].map(normalize_monto).astype(float).fillna(0))
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -292,7 +305,7 @@ def page_categorias():
 
     df = pd.DataFrame(transactions)
     if "Monto" in df.columns:
-        df["Monto"] = pd.to_numeric(df["Monto"], errors="coerce").fillna(0)
+        df["Monto"] = (df["Monto"].map(normalize_monto).astype(float).fillna(0))
 
     today = datetime.now()
     this_month = today.strftime("%Y-%m")
@@ -363,7 +376,7 @@ def page_comparacion():
 
     df = pd.DataFrame(transactions)
     if "Monto" in df.columns:
-        df["Monto"] = pd.to_numeric(df["Monto"], errors="coerce").fillna(0)
+        df["Monto"] = (df["Monto"].map(normalize_monto).astype(float).fillna(0))
 
     if "Mes" not in df.columns:
         st.info("No hay datos.")
@@ -649,7 +662,7 @@ def main():
     if transactions:
         df = pd.DataFrame(transactions)
         if "Monto" in df.columns:
-            df["Monto"] = pd.to_numeric(df["Monto"], errors="coerce").fillna(0)
+            df["Monto"] = (df["Monto"].map(normalize_monto).astype(float).fillna(0))
             total_all = df["Monto"].sum()
             st.sidebar.metric("Total Histórico", fmt_cop(total_all))
             st.sidebar.metric("Total Transacciones", len(df))
