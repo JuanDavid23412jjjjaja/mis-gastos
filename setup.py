@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import TOKEN_PATH, CLIENT_SECRETS_PATH, CREDENTIALS_DIR
+from config import TOKEN_PATH, CLIENT_SECRETS_PATH, CREDENTIALS_DIR, SCOPES
 
 
 def setup():
@@ -41,7 +41,7 @@ def setup():
         f"client_id={client_id}"
         f"&redirect_uri=http://localhost"
         f"&response_type=code"
-        f"&scope=https://mail.google.com/+https://www.googleapis.com/auth/spreadsheets+https://www.googleapis.com/auth/gmail.readonly+https://www.googleapis.com/auth/gmail.modify"
+        f"&scope={'+'.join(SCOPES)}"
         f"&access_type=offline"
         f"&prompt=consent"
     )

@@ -6,7 +6,6 @@ TOKEN_PATH = os.path.join(CREDENTIALS_DIR, "token.json")
 CLIENT_SECRETS_PATH = os.path.join(CREDENTIALS_DIR, "client_secret.json")
 
 SCOPES = [
-    "https://mail.google.com/",
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.readonly",
